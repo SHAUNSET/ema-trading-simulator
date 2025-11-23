@@ -5,6 +5,7 @@ from src.strategy import backtest_ema
 from src.portfolio import Portfolio
 from src.utils import plot_ema_chart, plot_equity_curve
 from datetime import datetime
+import pandas as pd
 
 def main():
     st.set_page_config(page_title="EMA Simulator", layout="wide")
@@ -14,52 +15,25 @@ def main():
     with st.expander("📖 Strategy Explanation"):
         st.markdown("""
 ### Understanding EMA (Exponential Moving Average)
+EMA gives **more weight to recent prices**, so it reacts faster than a simple moving average.
 
-An **EMA (Exponential Moving Average)** is a type of moving average that gives **more weight to recent prices**.  
-This makes it react faster to recent price changes compared to a simple moving average.
-
-- **Fast EMA**: Reacts quickly to recent price changes. Captures short-term trends.
-- **Slow EMA**: Reacts slower. Captures long-term trends.
-- **EMA Difference Threshold**: A value that defines how far apart the fast and slow EMA must be to trigger a buy or sell.
+- **Fast EMA**: Captures short-term trends.
+- **Slow EMA**: Captures long-term trends.
+- **EMA Difference Threshold**: Minimum difference between fast and slow EMA to trigger trades.
 
 ### How the Strategy Works
-
-1. **Buy Signal**  
-   - When the **Fast EMA** crosses **above the Slow EMA** by more than the threshold.  
-   - Indicates the stock is gaining momentum upward.  
-
-2. **Sell Signal**  
-   - When the **Fast EMA** crosses **below the Slow EMA** by more than the threshold.  
-   - Indicates the stock is losing momentum or may reverse downward.
-
-### Trade Example
-
-- Fast EMA = 10-day EMA  
-- Slow EMA = 21-day EMA  
-- Threshold = 0.5  
-
-If the 10-day EMA is **higher than 21-day EMA + 0.5**, the strategy triggers a **buy**.  
-If the 10-day EMA falls **below 21-day EMA - 0.5**, the strategy triggers a **sell**.
+1. **Buy Signal**: Fast EMA > Slow EMA + Threshold → momentum upward → buy.
+2. **Sell Signal**: Fast EMA < Slow EMA - Threshold → momentum downward → sell.
 
 ### Making Profit
-
-- Profit is made when you **buy low and sell high** based on EMA signals.  
-- The **portfolio value** updates after every trade, reflecting gains/losses.  
-- By adjusting **Fast EMA, Slow EMA, and Threshold**, you can fine-tune the strategy to respond faster or slower to market trends.
+- Buy low, sell high based on EMA crossovers.
+- Portfolio updates after every trade.
+- Adjust EMA periods and thresholds to optimize.
 
 ### Visual Guides
-
-- **EMA Crossover Chart**: Shows Fast EMA vs Slow EMA. Buy signals marked in green, Sell signals in red.  
-- **Equity Curve**: Shows portfolio growth over time. Helps visualize overall performance.
-
-### Tips for Users
-
-- Start with default settings and observe how trades are executed.  
-- Experiment with different EMA periods and thresholds to understand their effect.  
-- Focus on the **profit/loss column** to see which trades were successful.  
-- Remember: No strategy guarantees profit — this simulator is **educational** and helps understand market dynamics.
-
-""")
+- **EMA Crossover Chart**: Fast vs Slow EMA, buy/sell points highlighted.
+- **Equity Curve**: Portfolio value over time.
+        """)
 
     # ------------------ Backtest Settings ------------------
     st.sidebar.header("Backtest Settings")
@@ -98,29 +72,34 @@ If the 10-day EMA falls **below 21-day EMA - 0.5**, the strategy triggers a **se
             portfolio = Portfolio(capital)
             portfolio.update(trades)
 
-            # Portfolio summary
+            # ------------------ Portfolio Summary ------------------
             st.markdown("### 💼 Portfolio Summary")
             st.markdown(portfolio.summary())
+            
+            # Additional metrics
+            if not trades.empty:
+                profitable_trades = trades[trades['profit'] > 0]
+                avg_profit = profitable_trades['profit'].mean() if not profitable_trades.empty else 0
+                st.markdown(f"**Total Trades:** {len(trades)} | **Profitable Trades:** {len(profitable_trades)} | **Avg Profit per Winning Trade:** {avg_profit:.2f}")
 
-            # Trades table
+            # ------------------ Trades Table ------------------
             if not trades.empty:
                 st.markdown("### 🧾 Trades Executed")
-                st.dataframe(
-                    trades.style.apply(
-                        lambda row: [
-                            'background-color: #d4f4dd' if col == 'Profit' and v > 0
-                            else ('background-color: #f4d4d4' if col == 'Profit' and v <= 0 else '')
-                            for col, v in zip(row.index, row)
-                        ],
-                        axis=1
-                    )
-                )
+                
+                trades_display = trades.copy()
+                trades_display["profit"] = pd.to_numeric(trades_display["profit"], errors="coerce").fillna(0)
+                
+                def highlight_profit(val):
+                    color = '#d4f4dd' if val > 0 else ('#f4d4d4' if val < 0 else '')
+                    return f'background-color: {color}'
 
-                # EMA Chart
+                st.dataframe(trades_display.style.applymap(highlight_profit, subset=["profit"]))
+
+                # ------------------ EMA Chart ------------------
                 st.markdown("### 📉 EMA Crossovers")
                 st.plotly_chart(plot_ema_chart(df_ind, trades), use_container_width=True)
 
-                # Equity Curve
+                # ------------------ Equity Curve ------------------
                 st.markdown("### 📈 Equity Curve")
                 st.plotly_chart(plot_equity_curve(equity_curve), use_container_width=True)
             else:
