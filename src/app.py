@@ -6,7 +6,30 @@ from src.portfolio import Portfolio
 from src.utils import plot_ema_chart, plot_equity_curve
 from datetime import datetime
 import pandas as pd
+import numpy as np
+from datetime import timedelta
 
+# ------------------ Synthetic Data Generator ------------------
+def generate_synthetic(symbol: str, days: int = 252) -> pd.DataFrame:
+    np.random.seed(hash(symbol) % 2**32)
+    start_price = np.random.uniform(200, 300)
+    dates = [datetime.today() - timedelta(days=x) for x in range(days)]
+    dates.sort()
+    prices = [start_price]
+    for _ in range(1, days):
+        prices.append(prices[-1] * (1 + np.random.normal(0, 0.01)))
+    df = pd.DataFrame({
+        "date": dates,
+        "open": prices,
+        "high": [p * (1 + np.random.uniform(0, 0.02)) for p in prices],
+        "low": [p * (1 - np.random.uniform(0, 0.02)) for p in prices],
+        "close": prices,
+        "adj_close": prices,
+        "volume": np.random.randint(100000, 1000000, size=days)
+    })
+    return df
+
+# ------------------ Streamlit App ------------------
 def main():
     st.set_page_config(page_title="EMA Simulator", layout="wide")
     st.title("📈 EMA Trading Simulator")
@@ -37,11 +60,7 @@ EMA gives **more weight to recent prices**, so it reacts faster than a simple mo
 
     # ------------------ Backtest Settings ------------------
     st.sidebar.header("Backtest Settings")
-    stocks = st.sidebar.multiselect(
-        "Select Stocks",
-        ["AAPL", "MSFT", "TSLA"],
-        default=["AAPL"]
-    )
+    stocks = st.sidebar.multiselect("Select Stocks", ["AAPL", "MSFT", "TSLA"], default=["AAPL"])
     fast = st.sidebar.slider("Fast EMA", 1, 50, 9)
     slow = st.sidebar.slider("Slow EMA", 5, 200, 21)
     threshold = st.sidebar.number_input("EMA Difference Threshold", 0.0, 500.0, 0.5)
@@ -57,14 +76,13 @@ EMA gives **more weight to recent prices**, so it reacts faster than a simple mo
 
             # ------------------ Sanitize DataFrame ------------------
             if df.empty:
-                st.error(f"❌ Could not fetch data for {stock}. Using cached or synthetic data.")
-                continue
+                st.warning(f"⚠️ Could not fetch data for {stock}, generating synthetic data.")
+                df = generate_synthetic(stock)
 
-            if 'close' not in df.columns or df['close'].isnull().all():
-                st.error(f"❌ Invalid data for {stock}. Cannot run strategy.")
-                continue
+            if 'close' not in df.columns or df['close'].dropna().empty:
+                st.warning(f"⚠️ 'close' column missing or empty for {stock}, generating synthetic data.")
+                df = generate_synthetic(stock)
 
-            # Ensure 'close' is numeric
             df['close'] = pd.to_numeric(df['close'], errors='coerce')
             df = df.dropna(subset=['close'])
 
@@ -84,7 +102,7 @@ EMA gives **more weight to recent prices**, so it reacts faster than a simple mo
             # ------------------ Portfolio Summary ------------------
             st.markdown("### 💼 Portfolio Summary")
             st.markdown(portfolio.summary())
-            
+
             # Additional metrics
             if not trades.empty:
                 profitable_trades = trades[trades['profit'] > 0]
