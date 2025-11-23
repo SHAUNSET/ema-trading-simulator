@@ -55,9 +55,18 @@ EMA gives **more weight to recent prices**, so it reacts faster than a simple mo
             st.subheader(f"📌 {stock}")
             df = fetch_historical(stock)
 
+            # ------------------ Sanitize DataFrame ------------------
             if df.empty:
                 st.error(f"❌ Could not fetch data for {stock}. Using cached or synthetic data.")
                 continue
+
+            if 'close' not in df.columns or df['close'].isnull().all():
+                st.error(f"❌ Invalid data for {stock}. Cannot run strategy.")
+                continue
+
+            # Ensure 'close' is numeric
+            df['close'] = pd.to_numeric(df['close'], errors='coerce')
+            df = df.dropna(subset=['close'])
 
             # Show last update timestamp
             cache_path = f"data/{stock}.csv"
@@ -67,7 +76,7 @@ EMA gives **more weight to recent prices**, so it reacts faster than a simple mo
             else:
                 st.caption("🗂️ No cache timestamp available.")
 
-            # Run strategy
+            # ------------------ Run EMA Strategy ------------------
             trades, equity_curve, df_ind = backtest_ema(df, fast, slow, capital, threshold, max_trades)
             portfolio = Portfolio(capital)
             portfolio.update(trades)
@@ -85,10 +94,9 @@ EMA gives **more weight to recent prices**, so it reacts faster than a simple mo
             # ------------------ Trades Table ------------------
             if not trades.empty:
                 st.markdown("### 🧾 Trades Executed")
-                
                 trades_display = trades.copy()
                 trades_display["profit"] = pd.to_numeric(trades_display["profit"], errors="coerce").fillna(0)
-                
+
                 def highlight_profit(val):
                     color = '#d4f4dd' if val > 0 else ('#f4d4d4' if val < 0 else '')
                     return f'background-color: {color}'

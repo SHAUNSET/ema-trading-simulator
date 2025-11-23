@@ -44,7 +44,6 @@ def fetch_hybrid(symbol: str, days: int = 252) -> pd.DataFrame:
 
     # --- Fallback to synthetic ---
     print(f"⚠️ Could not fetch live data for {symbol}. Using synthetic data.")
-
     np.random.seed(hash(symbol) % 2**32)
     start_price = np.random.uniform(200, 300)
     dates = [datetime.today() - timedelta(days=x) for x in range(days)]
